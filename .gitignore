@@ -1,0 +1,32 @@
+# ======================
+# Entorno virtual y cachés
+# ======================
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ======================
+# Modelos entrenados (guardar en Drive o Git LFS si son pesados)
+*.pkl
+*.joblib
+
+# ======================
+# JSON grandes o afinidad
+*.json
+
+# ======================
+# Archivos Jupyter y logs
+.ipynb_checkpoints/
+*.log
+
+# ======================
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# ======================
+# Ignorar todo lo de data excepto el .gitkeep
+/data/*
+!/data/.gitkeep

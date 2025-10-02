@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+jupyter
+onnx
+skl2onnx
+rapidfuzz
+xgboost
+imblearn
+openpyxl
+fuzzywuzzy
+uvicorn
+fastapi
+pydantic
