@@ -1,3 +1,4 @@
+import os
 import joblib
 import numpy as np
 import pandas as pd
@@ -10,10 +11,18 @@ from typing import List
 # ==========================
 # 1. Cargar modelos y afinidad
 # ==========================
-riasec_model = joblib.load("../../models/riasec_model.pkl")
-ocean_model = joblib.load("../../models/ocean_model.pkl")
 
-with open("../../models/riasec_affinity.json", "r", encoding="utf-8") as f:
+# Usa variable de entorno si existe, si no, busca en ../models
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.getenv(
+    "MODELS_DIR",
+    os.path.abspath(os.path.join(BASE_DIR, "..", "..", "models"))
+)
+
+riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
+ocean_model = joblib.load(os.path.join(MODELS_DIR, "ocean_model.pkl"))
+
+with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
     riasec_affinity = json.load(f)
 
 # ==========================

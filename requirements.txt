@@ -1,16 +1,30 @@
-pandas
+# Core scientific stack
 numpy
-scikit-learn
+pandas
 matplotlib
 seaborn
-jupyter
-onnx
-skl2onnx
-rapidfuzz
+
+# Machine Learning
+scikit-learn
 xgboost
 imblearn
-openpyxl
+
+# Model export / interoperability
+onnx
+skl2onnx
+
+# String matching
+rapidfuzz
 fuzzywuzzy
-uvicorn
+
+# Excel I/O
+openpyxl
+
+# Web API
 fastapi
+uvicorn
 pydantic
+gunicorn
+
+# Dev / Notebook
+jupyter

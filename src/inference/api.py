@@ -2,7 +2,8 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from recommendation_pipeline import recommend_career
+from src.inference.recommendation_pipeline import recommend_career
+
 
 app = FastAPI(title="Career Recommendation API")
 

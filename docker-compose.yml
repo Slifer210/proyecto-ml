@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  career-api:
+    build: .
+    container_name: career-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODELS_DIR=/app/models
+    volumes:
+      - ./models:/app/models 
+    restart: unless-stopped
