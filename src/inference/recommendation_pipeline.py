@@ -3,21 +3,40 @@ import joblib
 import numpy as np
 import pandas as pd
 import json
+import gdown
 from fuzzywuzzy import process
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 
 # ==========================
-# 1. Cargar modelos y afinidad
+# 1. Descarga modelos si no existen
 # ==========================
 
-# Usa variable de entorno si existe, si no, busca en ../models
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.getenv(
     "MODELS_DIR",
     os.path.abspath(os.path.join(BASE_DIR, "..", "..", "models"))
 )
+
+os.makedirs(MODELS_DIR, exist_ok=True)
+
+# URLs desde variables de entorno (Render → Environment Variables)
+FILES = {
+    "riasec_model.pkl": os.getenv("RIASEC_URL"),
+    "ocean_model.pkl": os.getenv("OCEAN_URL"),
+    "riasec_affinity.json": os.getenv("AFFINITY_URL"),
+}
+
+for fname, url in FILES.items():
+    dest = os.path.join(MODELS_DIR, fname)
+    if not os.path.exists(dest) and url:
+        print(f"📥 Descargando {fname} desde {url} ...")
+        gdown.download(url, dest, quiet=False)
+
+# ==========================
+# 2. Cargar modelos y afinidad
+# ==========================
 
 riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
 ocean_model = joblib.load(os.path.join(MODELS_DIR, "ocean_model.pkl"))
@@ -28,6 +47,7 @@ with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8
 # ==========================
 # Funciones auxiliares
 # ==========================
+
 def normalize(name: str) -> str:
     """Normaliza nombres de carreras para comparación fuzzy."""
     return name.lower().split("(")[0].strip()
@@ -43,8 +63,9 @@ def fuzzy_match(career_str, riasec_label, score_cutoff=75):
     return best_score >= score_cutoff
 
 # ==========================
-# 2. Pipeline híbrido
+# 3. Pipeline híbrido
 # ==========================
+
 def recommend_career(
     riasec_features,
     ocean_items,
@@ -86,8 +107,9 @@ def recommend_career(
     }
 
 # ==========================
-# 3. API con FastAPI
+# 4. API con FastAPI
 # ==========================
+
 app = FastAPI(
     title="Career Recommendation API",
     description="Servicio REST que combina RIASEC + OCEAN con un diccionario de afinidad",

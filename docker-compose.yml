@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     environment:
       - MODELS_DIR=/app/models
-    volumes:
-      - ./models:/app/models 
+      - OCEAN_URL=https://drive.google.com/uc?id=1Yhjc328UihuUmPzWx5DIOB1xRBhDdYh_
+      - AFFINITY_URL=https://drive.google.com/uc?id=183lfthoiLsJ-ZktWSyRPcWnqNl0G3YCP
+      - RIASEC_URL=https://drive.google.com/uc?id=1nLZtkjR-2paVAvvUSYbONUzLUFlBIgZ3
     restart: unless-stopped

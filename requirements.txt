@@ -12,6 +12,8 @@ imblearn
 # Model export / interoperability
 onnx
 skl2onnx
+gdown
+
 
 # String matching
 rapidfuzz
