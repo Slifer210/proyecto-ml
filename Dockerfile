@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código y modelos
 COPY src/ /app/src
-COPY models/ /app/models
+RUN mkdir -p /app/models
 
 # Definir variable de entorno para la ruta de modelos
 ENV MODELS_DIR=/app/models
