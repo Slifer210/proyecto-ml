@@ -1,6 +1,5 @@
 import os
 import joblib
-import numpy as np
 import pandas as pd
 import json
 import gdown
@@ -35,14 +34,37 @@ for fname, url in FILES.items():
         gdown.download(url, dest, quiet=False)
 
 # ==========================
-# 2. Cargar modelos y afinidad
+# 2. Lazy loading (solo carga cuando se necesita)
 # ==========================
 
-riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
-ocean_model = joblib.load(os.path.join(MODELS_DIR, "ocean_model.pkl"))
+_riasec_model = None
+_ocean_model = None
+_riasec_affinity = None
 
-with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
-    riasec_affinity = json.load(f)
+def get_riasec_model():
+    global _riasec_model
+    if _riasec_model is None:
+        path = os.path.join(MODELS_DIR, "riasec_model.pkl")
+        print("🔄 Cargando modelo RIASEC...")
+        _riasec_model = joblib.load(path)
+    return _riasec_model
+
+def get_ocean_model():
+    global _ocean_model
+    if _ocean_model is None:
+        path = os.path.join(MODELS_DIR, "ocean_model.pkl")
+        print("🔄 Cargando modelo OCEAN...")
+        _ocean_model = joblib.load(path)
+    return _ocean_model
+
+def get_affinity():
+    global _riasec_affinity
+    if _riasec_affinity is None:
+        path = os.path.join(MODELS_DIR, "riasec_affinity.json")
+        print("🔄 Cargando diccionario de afinidad...")
+        with open(path, "r", encoding="utf-8") as f:
+            _riasec_affinity = json.load(f)
+    return _riasec_affinity
 
 # ==========================
 # Funciones auxiliares
@@ -54,6 +76,7 @@ def normalize(name: str) -> str:
 
 def fuzzy_match(career_str, riasec_label, score_cutoff=75):
     """Verifica si una carrera tiene afinidad con el perfil RIASEC."""
+    riasec_affinity = get_affinity()
     target_list = riasec_affinity.get(riasec_label, [])
     if not target_list:
         return False
@@ -75,6 +98,10 @@ def recommend_career(
 ):
     """Pipeline RIASEC + OCEAN con diccionario de afinidad."""
 
+    riasec_model = get_riasec_model()
+    ocean_model = get_ocean_model()
+    riasec_affinity = get_affinity()
+
     # --- Paso 1: predecir perfil RIASEC ---
     riasec_input = pd.DataFrame([riasec_features],
                                 columns=["R", "I", "A", "S", "E", "C"])
@@ -91,9 +118,7 @@ def recommend_career(
     adjusted = []
     for career in carreras:
         score = 1.0  # base
-        # Boost con RIASEC
         score *= weight_riasec
-        # Ajuste con OCEAN (ejemplo simple usando Openness + Conscientiousness)
         ocean_boost = (ocean_vector[0] + ocean_vector[1]) / 2
         score *= (1 + weight_ocean * ocean_boost)
         adjusted.append((career, score))
