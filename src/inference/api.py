@@ -32,6 +32,13 @@ def predict(input: UserInput):
             ocean_items=input.ocean,
             top_n=5
         )
-        return {"status": "ok", "result": result}
+
+        # result debería devolver algo como:
+        # { "riasec": "RIA", "ocean_vector": [...], "recomendaciones": [["Psicología"], ["Administración"]] }
+
+        # Devolver directamente el formato esperado por C#
+        return result
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
