@@ -30,3 +30,6 @@ gunicorn
 
 # Dev / Notebook
 jupyter
+
+# Translator
+deep-translator

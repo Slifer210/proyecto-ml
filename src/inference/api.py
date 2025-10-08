@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from src.inference.recommendation_pipeline import recommend_career
+from fastapi.responses import JSONResponse
 
 # ==========================
 # API FastAPI
@@ -25,20 +26,31 @@ def root():
 
 @app.post("/predict")
 def predict(input: UserInput):
-    """Recibe el perfil RIASEC y OCEAN y devuelve recomendaciones de carrera."""
+    """
+    Recibe el perfil RIASEC y OCEAN y devuelve recomendaciones de carrera.
+    Formato compatible con el cliente C# (ASP.NET).
+    """
     try:
         result = recommend_career(
             riasec_features=input.riasec,
             ocean_items=input.ocean,
-            top_n=5
+            top_n=3
         )
 
-        # result debería devolver algo como:
-        # { "riasec": "RIA", "ocean_vector": [...], "recomendaciones": [["Psicología"], ["Administración"]] }
-
-        # Devolver directamente el formato esperado por C#
-        return result
+        # Respuesta JSON con codificación explícita UTF-8
+        return JSONResponse(
+            content={
+                "riasec": result["riasec"],
+                "subperfil": result["subperfil"],
+                "ocean_vector": result["ocean_vector"],
+                "recomendaciones": result["recomendaciones"]
+            },
+            media_type="application/json; charset=utf-8"
+        )
 
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(
+            content={"status": "error", "message": str(e)},
+            media_type="application/json; charset=utf-8"
+        )
 
