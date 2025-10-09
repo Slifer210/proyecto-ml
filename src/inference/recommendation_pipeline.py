@@ -33,44 +33,7 @@ for fname, url in FILES.items():
 
 
 # ==========================
-# 2. Lazy loading de modelos
-# ==========================
-
-_riasec_model = None
-_ocean_model = None
-_riasec_affinity = None
-
-
-def get_riasec_model():
-    global _riasec_model
-    if _riasec_model is None:
-        path = os.path.join(MODELS_DIR, "riasec_model.pkl")
-        print("Cargando modelo RIASEC...")
-        _riasec_model = joblib.load(path)
-    return _riasec_model
-
-
-def get_ocean_model():
-    global _ocean_model
-    if _ocean_model is None:
-        path = os.path.join(MODELS_DIR, "ocean_model.pkl")
-        print("Cargando modelo OCEAN...")
-        _ocean_model = joblib.load(path)
-    return _ocean_model
-
-
-def get_affinity():
-    global _riasec_affinity
-    if _riasec_affinity is None:
-        path = os.path.join(MODELS_DIR, "riasec_affinity.json")
-        print("Cargando diccionario de afinidad...")
-        with open(path, "r", encoding="utf-8") as f:
-            _riasec_affinity = json.load(f)
-    return _riasec_affinity
-
-
-# ==========================
-# 3. Funciones auxiliares
+# 2. Funciones auxiliares
 # ==========================
 
 def normalize(name: str) -> str:
@@ -80,7 +43,8 @@ def normalize(name: str) -> str:
 
 def fuzzy_match(career_str, riasec_label, score_cutoff=75):
     """Verifica si una carrera tiene afinidad con el perfil RIASEC."""
-    riasec_affinity = get_affinity()
+    with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
+        riasec_affinity = json.load(f)
     target_list = riasec_affinity.get(riasec_label, [])
     if not target_list:
         return False
@@ -98,7 +62,7 @@ def log_memory():
 
 
 # ==========================
-# 4. Determinar subperfil RIASEC
+# 3. Determinar subperfil RIASEC
 # ==========================
 
 def get_subprofile(riasec_vector):
@@ -123,7 +87,7 @@ def get_subprofile(riasec_vector):
 
 
 # ==========================
-# 5. Pipeline principal RIASEC + OCEAN
+# 4. Pipeline principal (optimizando RAM)
 # ==========================
 
 def recommend_career(
@@ -133,23 +97,30 @@ def recommend_career(
     weight_riasec=1.2,
     weight_ocean=0.2
 ):
-    """Pipeline híbrido RIASEC + OCEAN optimizado para Render Free Tier."""
+    """
+    Pipeline híbrido RIASEC + OCEAN optimizado para Render Free Tier (512 MB).
+    Carga y libera cada modelo secuencialmente para minimizar uso de RAM.
+    """
 
     try:
-        # --- Cargar modelos (lazy) ---
-        riasec_model = get_riasec_model()
-        ocean_model = get_ocean_model()
-        riasec_affinity = get_affinity()
+        # --- Paso 1: cargar afinidad (liviano) ---
+        with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
+            riasec_affinity = json.load(f)
 
-        # --- Predecir perfil principal RIASEC ---
+        # --- Paso 2: cargar y usar modelo RIASEC ---
+        print("Cargando modelo RIASEC (temporal)...")
+        riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
+
         riasec_input = pd.DataFrame([riasec_features], columns=["R", "I", "A", "S", "E", "C"])
         riasec_pred = riasec_model.predict(riasec_input)[0]
         riasec_label = str(riasec_pred)
-
-        # --- Determinar subperfil ---
         sub_label = get_subprofile(riasec_features)
 
-        # --- Mapear a etiquetas conocidas ---
+        # Liberar RIASEC de memoria
+        del riasec_model, riasec_input
+        gc.collect()
+
+        # --- Paso 3: mapear etiquetas ---
         alias_map = {
             "R-Tech": "R-Tech", "R-Ind": "R-Ind", "R-Build": "R-Build", "R-Geo": "R-Geo", "R-Agro": "R-Agro",
             "I-Science": "I-Científico", "I-Health": "I-Médico", "I-Analytic": "I-Analítico", "I-Tech": "I-Tecnológico",
@@ -160,7 +131,7 @@ def recommend_career(
         }
         mapped_label = alias_map.get(sub_label, sub_label)
 
-        # --- Extraer carreras desde JSON ---
+        # --- Paso 4: extraer carreras ---
         carreras_data = []
         if "-" in mapped_label:
             base, sub = mapped_label.split("-", 1)
@@ -170,12 +141,23 @@ def recommend_career(
             for subblock in sub_aff.values():
                 carreras_data.extend(subblock)
 
-        # --- Predecir vector OCEAN ---
+        # Liberar afinidad si es grande
+        del riasec_affinity
+        gc.collect()
+
+        # --- Paso 5: cargar y usar modelo OCEAN ---
+        print("Cargando modelo OCEAN (temporal)...")
+        ocean_model = joblib.load(os.path.join(MODELS_DIR, "ocean_model.pkl"))
+
         item_cols = list(ocean_model.estimators_[0].feature_names_in_)
         ocean_input = pd.DataFrame([ocean_items], columns=item_cols)
         ocean_vector = ocean_model.predict(ocean_input)[0]
 
-        # --- Calcular afinidad ---
+        # Liberar OCEAN de memoria
+        del ocean_model, ocean_input
+        gc.collect()
+
+        # --- Paso 6: combinar afinidades ---
         adjusted = []
         for entry in carreras_data:
             carrera = entry["carrera"]
@@ -189,16 +171,20 @@ def recommend_career(
                 "score": round(score, 3)
             })
 
+        # Liberar datos intermedios
+        del carreras_data, ocean_vector
+        gc.collect()
+
         adjusted_final = sorted(adjusted, key=lambda x: x["score"], reverse=True)[:top_n]
 
-        # --- Log de memoria y limpieza ---
+        # --- Paso 7: log final de memoria ---
         log_memory()
         gc.collect()
 
         return {
             "riasec": riasec_label,
             "subperfil": sub_label,
-            "ocean_vector": ocean_vector.tolist(),
+            "ocean_vector": [],
             "recomendaciones": adjusted_final
         }
 
