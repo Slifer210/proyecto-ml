@@ -70,10 +70,14 @@ def get_subprofile(riasec_vector):
     subprofiles = {
         "R": {"C": "R-Tech", "E": "R-Ind", "A": "R-Build", "S": "R-Agro", "I": "R-Geo"},
         "I": {"R": "I-Tech", "A": "I-Science", "S": "I-Health", "C": "I-Analytic", "E": "I-Economic"},
-        "A": {"S": "A-ComunicaciónVisual", "E": "A-Diseño", "I": "A-ArtesEscénicas", "R": "A-ArtesPlásticas", "C": "A-PatrimonioCultural"},
-        "S": {"E": "S-Comunitario", "I": "S-Psicológico", "A": "S-Educativo", "C": "S-Salud", "R": "S-DeporteYRecreación"},
-        "E": {"C": "E-Negocios", "A": "E-MarketingYComercio", "S": "E-DerechoYGestiónPública", "I": "E-EmpresarialTecnológico", "R": "E-EmpresarialIndustrial"},
-        "C": {"R": "C-Informático", "E": "C-ContableFinanciero", "S": "C-Administrativo", "I": "C-EstadísticoAnalítico", "A": "C-Ofimático"},
+        "A": {"S": "A-ComunicaciónVisual", "E": "A-Diseño", "I": "A-ArtesEscénicas",
+              "R": "A-ArtesPlásticas", "C": "A-PatrimonioCultural"},
+        "S": {"E": "S-Comunitario", "I": "S-Psicológico", "A": "S-Educativo",
+              "C": "S-Salud", "R": "S-DeporteYRecreación"},
+        "E": {"C": "E-Negocios", "A": "E-MarketingYComercio", "S": "E-DerechoYGestiónPública",
+              "I": "E-EmpresarialTecnológico", "R": "E-EmpresarialIndustrial"},
+        "C": {"R": "C-Informático", "E": "C-ContableFinanciero", "S": "C-Administrativo",
+              "I": "C-EstadísticoAnalítico", "A": "C-Ofimático"},
     }
 
     letters = ["R", "I", "A", "S", "E", "C"]
@@ -87,7 +91,7 @@ def get_subprofile(riasec_vector):
 
 
 # ==========================
-# 4. Pipeline principal (optimizando RAM)
+# 4. Pipeline principal (optimizando RAM y entrada flexible)
 # ==========================
 
 def recommend_career(
@@ -99,11 +103,26 @@ def recommend_career(
 ):
     """
     Pipeline híbrido RIASEC + OCEAN optimizado para Render Free Tier (512 MB).
-    Carga y libera cada modelo secuencialmente para minimizar uso de RAM.
+    - Acepta 6, 18 o más ítems RIASEC.
+    - Carga modelos de forma secuencial (uno a la vez).
     """
 
     try:
-        # --- Paso 1: cargar afinidad (liviano) ---
+        # --- Paso 0: Ajustar entrada RIASEC (6, 18 o más ítems) ---
+        if len(riasec_features) > 6:
+            n = len(riasec_features)
+            # Divide en 6 bloques proporcionales
+            group_size = n // 6
+            grouped = [
+                sum(riasec_features[i:i+group_size]) / group_size
+                for i in range(0, n, group_size)
+            ]
+            grouped = grouped[:6]  # garantiza que haya solo 6 valores
+            print(f"[INFO] RIASEC agrupado automáticamente ({n} → 6)")
+        else:
+            grouped = riasec_features
+
+        # --- Paso 1: cargar afinidad ---
         with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
             riasec_affinity = json.load(f)
 
@@ -111,12 +130,11 @@ def recommend_career(
         print("Cargando modelo RIASEC (temporal)...")
         riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
 
-        riasec_input = pd.DataFrame([riasec_features], columns=["R", "I", "A", "S", "E", "C"])
+        riasec_input = pd.DataFrame([grouped], columns=["R", "I", "A", "S", "E", "C"])
         riasec_pred = riasec_model.predict(riasec_input)[0]
         riasec_label = str(riasec_pred)
-        sub_label = get_subprofile(riasec_features)
+        sub_label = get_subprofile(grouped)
 
-        # Liberar RIASEC de memoria
         del riasec_model, riasec_input
         gc.collect()
 
@@ -141,7 +159,6 @@ def recommend_career(
             for subblock in sub_aff.values():
                 carreras_data.extend(subblock)
 
-        # Liberar afinidad si es grande
         del riasec_affinity
         gc.collect()
 
@@ -153,7 +170,6 @@ def recommend_career(
         ocean_input = pd.DataFrame([ocean_items], columns=item_cols)
         ocean_vector = ocean_model.predict(ocean_input)[0]
 
-        # Liberar OCEAN de memoria
         del ocean_model, ocean_input
         gc.collect()
 
@@ -171,20 +187,18 @@ def recommend_career(
                 "score": round(score, 3)
             })
 
-        # Liberar datos intermedios
         del carreras_data, ocean_vector
         gc.collect()
 
         adjusted_final = sorted(adjusted, key=lambda x: x["score"], reverse=True)[:top_n]
 
-        # --- Paso 7: log final de memoria ---
+        # --- Paso 7: log de memoria ---
         log_memory()
         gc.collect()
 
         return {
             "riasec": riasec_label,
             "subperfil": sub_label,
-            "ocean_vector": [],
             "recomendaciones": adjusted_final
         }
 
