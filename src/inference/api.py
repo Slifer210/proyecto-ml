@@ -41,7 +41,7 @@ def log_memory_usage():
 
 def ensure_models():
     """Descarga los modelos una sola vez al iniciar el contenedor, si no existen."""
-    MODELS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models"))
+    MODELS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models"))
     os.makedirs(MODELS_DIR, exist_ok=True)
 
     FILES = {
