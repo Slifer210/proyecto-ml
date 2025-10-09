@@ -4,11 +4,10 @@ import joblib
 import pandas as pd
 import json
 import psutil
-import gdown
 from fuzzywuzzy import process
 
 # ==========================
-# 1. Configuración de rutas y descarga de modelos
+# 1. Configuración de rutas (sin descarga)
 # ==========================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,18 +17,7 @@ MODELS_DIR = os.getenv(
 )
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-# URLs desde variables de entorno (Render → Environment Variables)
-FILES = {
-    "riasec_model.pkl": os.getenv("RIASEC_URL"),
-    "ocean_model.pkl": os.getenv("OCEAN_URL"),
-    "riasec_affinity.json": os.getenv("AFFINITY_URL"),
-}
-
-for fname, url in FILES.items():
-    dest = os.path.join(MODELS_DIR, fname)
-    if not os.path.exists(dest) and url:
-        print(f"Descargando {fname} desde {url} ...")
-        gdown.download(url, dest, quiet=False)
+print(f"[INIT] Cargando pipeline con modelos desde: {MODELS_DIR}")
 
 
 # ==========================
@@ -43,15 +31,19 @@ def normalize(name: str) -> str:
 
 def fuzzy_match(career_str, riasec_label, score_cutoff=75):
     """Verifica si una carrera tiene afinidad con el perfil RIASEC."""
-    with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
-        riasec_affinity = json.load(f)
-    target_list = riasec_affinity.get(riasec_label, [])
-    if not target_list:
+    try:
+        with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
+            riasec_affinity = json.load(f)
+        target_list = riasec_affinity.get(riasec_label, [])
+        if not target_list:
+            return False
+        target_list_norm = [normalize(t) for t in target_list]
+        career_norm = normalize(career_str)
+        best_match, best_score = process.extractOne(career_norm, target_list_norm)
+        return best_score >= score_cutoff
+    except Exception as e:
+        print(f"[WARN] fuzzy_match error: {e}")
         return False
-    target_list_norm = [normalize(t) for t in target_list]
-    career_norm = normalize(career_str)
-    best_match, best_score = process.extractOne(career_norm, target_list_norm)
-    return best_score >= score_cutoff
 
 
 def log_memory():
@@ -108,15 +100,14 @@ def recommend_career(
     """
 
     try:
-        # --- Paso 0: normalizar entrada RIASEC (acepta 6, 18 o más ítems) ---
+        # --- Paso 0: normalizar entrada RIASEC ---
         if len(riasec_features) > 6:
             n = len(riasec_features)
             group_size = n // 6
             grouped = [
                 sum(riasec_features[i:i + group_size]) / group_size
                 for i in range(0, n, group_size)
-            ]
-            grouped = grouped[:6]
+            ][:6]
             print(f"[INFO] RIASEC agrupado automáticamente ({n} → 6)")
         else:
             grouped = riasec_features
@@ -125,15 +116,13 @@ def recommend_career(
         with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
             riasec_affinity = json.load(f)
 
-        # --- Paso 2: ejecutar modelo RIASEC ---
-        print("Cargando modelo RIASEC...")
+        # --- Paso 2: modelo RIASEC ---
+        print("[LOAD] Modelo RIASEC...")
         riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
         riasec_input = pd.DataFrame([grouped], columns=["R", "I", "A", "S", "E", "C"])
         riasec_pred = riasec_model.predict(riasec_input)[0]
         riasec_label = str(riasec_pred)
         sub_label = get_subprofile(grouped)
-
-        # Liberar modelo RIASEC
         del riasec_model, riasec_input
         gc.collect()
 
@@ -157,32 +146,26 @@ def recommend_career(
             sub_aff = riasec_affinity.get(riasec_label, {})
             for subblock in sub_aff.values():
                 carreras_data.extend(subblock)
-
-        # Liberar afinidad
         del riasec_affinity
         gc.collect()
 
-        # --- Paso 5: ejecutar modelo OCEAN ---
-        print("Cargando modelo OCEAN...")
+        # --- Paso 5: modelo OCEAN ---
+        print("[LOAD] Modelo OCEAN...")
         ocean_model = joblib.load(os.path.join(MODELS_DIR, "ocean_model.pkl"))
         item_cols = list(ocean_model.estimators_[0].feature_names_in_)
         ocean_input = pd.DataFrame([ocean_items], columns=item_cols)
         ocean_vector = ocean_model.predict(ocean_input)[0]
-
-        # Liberar modelo OCEAN
         del ocean_model, ocean_input
         gc.collect()
 
         # --- Paso 6: calcular recomendaciones híbridas ---
         adjusted = []
-
         ocean_boost = sum(ocean_vector) / len(ocean_vector)
 
         for entry in carreras_data:
-            carrera = entry["carrera"]
+            carrera = entry.get("carrera")
             universidades = entry.get("universidades", [])
-            score = 1.0 * weight_riasec
-            score *= (1 + weight_ocean * ocean_boost)
+            score = weight_riasec * (1 + weight_ocean * ocean_boost)
             adjusted.append({
                 "carrera": carrera,
                 "universidades": universidades,
@@ -191,7 +174,7 @@ def recommend_career(
 
         adjusted_final = sorted(adjusted, key=lambda x: x["score"], reverse=True)[:top_n]
 
-        # --- Paso 7: log final y retorno ---
+        # --- Paso 7: log final ---
         log_memory()
         gc.collect()
 
