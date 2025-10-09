@@ -6,15 +6,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código y modelos
+# Copiar código y crear carpeta de modelos
 COPY src/ /app/src
 RUN mkdir -p /app/models
 
-# Definir variable de entorno para la ruta de modelos
+# Variable de entorno
 ENV MODELS_DIR=/app/models
 
 # Exponer puerto
 EXPOSE 8000
 
-# Correr con Gunicorn + Uvicorn en producción
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "src.inference.api:app", "-b", "0.0.0.0:8000", "--workers", "2"]
+# Ejecutar con un solo worker para evitar OOM en Render Free
+CMD ["gunicorn", "-w", "1", "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "src.inference.api:app", "-b", "0.0.0.0:8000"]
