@@ -91,7 +91,7 @@ def get_subprofile(riasec_vector):
 
 
 # ==========================
-# 4. Pipeline principal (optimizando RAM y entrada flexible)
+# 4. Pipeline principal (RIASEC + OCEAN secuencial)
 # ==========================
 
 def recommend_career(
@@ -102,39 +102,38 @@ def recommend_career(
     weight_ocean=0.2
 ):
     """
-    Pipeline híbrido RIASEC + OCEAN optimizado para Render Free Tier (512 MB).
-    - Acepta 6, 18 o más ítems RIASEC.
-    - Carga modelos de forma secuencial (uno a la vez).
+    Ejecuta los modelos RIASEC y OCEAN secuencialmente.
+    Devuelve recomendaciones híbridas ajustadas con los 5 rasgos OCEAN.
+    Optimizado para Render Free Tier (512 MB).
     """
 
     try:
-        # --- Paso 0: Ajustar entrada RIASEC (6, 18 o más ítems) ---
+        # --- Paso 0: normalizar entrada RIASEC (acepta 6, 18 o más ítems) ---
         if len(riasec_features) > 6:
             n = len(riasec_features)
-            # Divide en 6 bloques proporcionales
             group_size = n // 6
             grouped = [
                 sum(riasec_features[i:i+group_size]) / group_size
                 for i in range(0, n, group_size)
             ]
-            grouped = grouped[:6]  # garantiza que haya solo 6 valores
+            grouped = grouped[:6]
             print(f"[INFO] RIASEC agrupado automáticamente ({n} → 6)")
         else:
             grouped = riasec_features
 
-        # --- Paso 1: cargar afinidad ---
+        # --- Paso 1: cargar afinidad (liviano) ---
         with open(os.path.join(MODELS_DIR, "riasec_affinity.json"), "r", encoding="utf-8") as f:
             riasec_affinity = json.load(f)
 
-        # --- Paso 2: cargar y usar modelo RIASEC ---
-        print("Cargando modelo RIASEC (temporal)...")
+        # --- Paso 2: ejecutar modelo RIASEC ---
+        print("Cargando modelo RIASEC...")
         riasec_model = joblib.load(os.path.join(MODELS_DIR, "riasec_model.pkl"))
-
         riasec_input = pd.DataFrame([grouped], columns=["R", "I", "A", "S", "E", "C"])
         riasec_pred = riasec_model.predict(riasec_input)[0]
         riasec_label = str(riasec_pred)
         sub_label = get_subprofile(grouped)
 
+        # Liberar modelo RIASEC
         del riasec_model, riasec_input
         gc.collect()
 
@@ -159,27 +158,31 @@ def recommend_career(
             for subblock in sub_aff.values():
                 carreras_data.extend(subblock)
 
+        # Liberar afinidad
         del riasec_affinity
         gc.collect()
 
-        # --- Paso 5: cargar y usar modelo OCEAN ---
-        print("Cargando modelo OCEAN (temporal)...")
+        # --- Paso 5: ejecutar modelo OCEAN ---
+        print("Cargando modelo OCEAN...")
         ocean_model = joblib.load(os.path.join(MODELS_DIR, "ocean_model.pkl"))
-
         item_cols = list(ocean_model.estimators_[0].feature_names_in_)
         ocean_input = pd.DataFrame([ocean_items], columns=item_cols)
         ocean_vector = ocean_model.predict(ocean_input)[0]
 
+        # Liberar modelo OCEAN
         del ocean_model, ocean_input
         gc.collect()
 
-        # --- Paso 6: combinar afinidades ---
+        # --- Paso 6: calcular recomendaciones híbridas ---
         adjusted = []
+
+        # Usa los 5 rasgos del Big Five (O, C, E, A, N)
+        ocean_boost = sum(ocean_vector) / len(ocean_vector)
+
         for entry in carreras_data:
             carrera = entry["carrera"]
             universidades = entry.get("universidades", [])
             score = 1.0 * weight_riasec
-            ocean_boost = (ocean_vector[0] + ocean_vector[1]) / 2
             score *= (1 + weight_ocean * ocean_boost)
             adjusted.append({
                 "carrera": carrera,
@@ -187,18 +190,16 @@ def recommend_career(
                 "score": round(score, 3)
             })
 
-        del carreras_data, ocean_vector
-        gc.collect()
-
         adjusted_final = sorted(adjusted, key=lambda x: x["score"], reverse=True)[:top_n]
 
-        # --- Paso 7: log de memoria ---
+        # --- Paso 7: log final y retorno ---
         log_memory()
         gc.collect()
 
         return {
             "riasec": riasec_label,
             "subperfil": sub_label,
+            "ocean_vector": ocean_vector.tolist(),
             "recomendaciones": adjusted_final
         }
 
