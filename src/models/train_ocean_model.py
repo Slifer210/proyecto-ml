@@ -68,7 +68,7 @@ print(f"Train: {X_train.shape}, Test: {X_test.shape}")
 # 5. Entrenar modelo
 # ==========================
 model = MultiOutputRegressor(RandomForestRegressor(
-    n_estimators=100,
+    n_estimators=30,
     max_depth=15,
     random_state=42,
     n_jobs=-1
