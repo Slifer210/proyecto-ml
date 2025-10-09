@@ -5,7 +5,6 @@ import pandas as pd
 import json
 import psutil
 import gdown
-from deep_translator import GoogleTranslator
 from fuzzywuzzy import process
 
 # ==========================
@@ -91,16 +90,6 @@ def fuzzy_match(career_str, riasec_label, score_cutoff=75):
     return best_score >= score_cutoff
 
 
-def traducir_lista(carreras):
-    """Traduce dinámicamente una lista de carreras del inglés al español (latino)."""
-    try:
-        traductor = GoogleTranslator(source='en', target='es')
-        return [traductor.translate(c) for c in carreras]
-    except Exception as e:
-        print(f"[WARN] Error al traducir: {e}")
-        return carreras
-
-
 def log_memory():
     """Registra en consola el consumo de memoria actual (MB)."""
     process = psutil.Process(os.getpid())
@@ -142,8 +131,7 @@ def recommend_career(
     ocean_items,
     top_n=3,
     weight_riasec=1.2,
-    weight_ocean=0.2,
-    translate=False
+    weight_ocean=0.2
 ):
     """Pipeline híbrido RIASEC + OCEAN optimizado para Render Free Tier."""
 
@@ -202,11 +190,6 @@ def recommend_career(
             })
 
         adjusted_final = sorted(adjusted, key=lambda x: x["score"], reverse=True)[:top_n]
-
-        # --- Traducción opcional ---
-        if translate:
-            for item in adjusted_final:
-                item["carrera"] = GoogleTranslator(source='en', target='es').translate(item["carrera"])
 
         # --- Log de memoria y limpieza ---
         log_memory()
