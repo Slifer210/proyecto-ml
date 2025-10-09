@@ -113,7 +113,7 @@ def recommend_career(
             n = len(riasec_features)
             group_size = n // 6
             grouped = [
-                sum(riasec_features[i:i+group_size]) / group_size
+                sum(riasec_features[i:i + group_size]) / group_size
                 for i in range(0, n, group_size)
             ]
             grouped = grouped[:6]
@@ -176,7 +176,6 @@ def recommend_career(
         # --- Paso 6: calcular recomendaciones híbridas ---
         adjusted = []
 
-        # Usa los 5 rasgos del Big Five (O, C, E, A, N)
         ocean_boost = sum(ocean_vector) / len(ocean_vector)
 
         for entry in carreras_data:
@@ -199,16 +198,15 @@ def recommend_career(
         return {
             "riasec": riasec_label,
             "subperfil": sub_label,
-            "ocean_vector": {
-                "O": float(ocean_vector[0]),
-                "C": float(ocean_vector[1]),
-                "E": float(ocean_vector[2]),
-                "A": float(ocean_vector[3]),
-                "N": float(ocean_vector[4]),
-            },
+            "ocean_vector": [
+                {"trait": "O", "value": float(ocean_vector[0])},
+                {"trait": "C", "value": float(ocean_vector[1])},
+                {"trait": "E", "value": float(ocean_vector[2])},
+                {"trait": "A", "value": float(ocean_vector[3])},
+                {"trait": "N", "value": float(ocean_vector[4])}
+            ],
             "recomendaciones": adjusted_final
         }
-
 
     except Exception as e:
         gc.collect()
