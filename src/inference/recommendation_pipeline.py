@@ -199,9 +199,16 @@ def recommend_career(
         return {
             "riasec": riasec_label,
             "subperfil": sub_label,
-            "ocean_vector": ocean_vector.tolist(),
+            "ocean_vector": {
+                "O": float(ocean_vector[0]),
+                "C": float(ocean_vector[1]),
+                "E": float(ocean_vector[2]),
+                "A": float(ocean_vector[3]),
+                "N": float(ocean_vector[4]),
+            },
             "recomendaciones": adjusted_final
         }
+
 
     except Exception as e:
         gc.collect()
