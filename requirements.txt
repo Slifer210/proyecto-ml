@@ -21,6 +21,7 @@ fuzzywuzzy
 
 # Excel I/O
 openpyxl
+joblib
 
 # Web API
 fastapi
